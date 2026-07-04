@@ -52,7 +52,7 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
       - name: Build and push lake image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: ./backend
           push: true
@@ -84,7 +84,7 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
       - name: Build and push lake image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: ./backend
           push: true
@@ -127,7 +127,7 @@ jobs:
           path: /tmp/devlake-build-cache-${{ matrix.platform }}
           key: buildx-devlake-build-cache-${{ github.run_id }}-${{ matrix.platform }}
       - name: Build and cache lake build
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: ./backend
           push: false
@@ -194,7 +194,7 @@ jobs:
               echo "TAGS=${image_name}:${{ github.ref_name }}_${{ needs.get-timestamp.outputs.timestamp }}_${{ steps.get_short_sha.outputs.SHORT_SHA }}" >> $GITHUB_OUTPUT
           fi
       - name: Build and push lake image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: ./backend
           push: true
@@ -273,7 +273,7 @@ jobs:
               echo "TAGS=${image_name}:${{ github.ref_name }}_${{ needs.get-timestamp.outputs.timestamp }}_${{ steps.get_short_sha.outputs.SHORT_SHA }}" >> $GITHUB_OUTPUT
           fi
       - name: Build and push ${{ matrix.build.name }} image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: ${{ matrix.build.context }}
           push: true
