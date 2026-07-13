@@ -21,10 +21,9 @@ import (
 
 	"github.com/apache/incubator-devlake/core/context"
 	"github.com/apache/incubator-devlake/core/errors"
-	"github.com/apache/incubator-devlake/core/models/common"
 	"github.com/apache/incubator-devlake/core/plugin"
-	helper "github.com/apache/incubator-devlake/helpers/pluginhelper/api"
 	"github.com/apache/incubator-devlake/helpers/migrationhelper"
+	helper "github.com/apache/incubator-devlake/helpers/pluginhelper/api"
 )
 
 var _ plugin.MigrationScript = (*initSchema)(nil)
@@ -45,9 +44,20 @@ func (agentReadyConnection20260604) TableName() string {
 }
 
 type agentReadyScope20260604 struct {
-	common.Scope `mapstructure:",squash"`
-	FullName     string `gorm:"primaryKey;type:varchar(255)"`
-	Name         string `gorm:"type:varchar(255)"`
+	// common.NoPKModel fields
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// common.RawDataOrigin fields
+	RawDataParams string `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
+	RawDataTable  string `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
+	RawDataId     uint64 `gorm:"column:_raw_data_id" json:"_raw_data_id"`
+	RawDataRemark string `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
+	// common.Scope fields
+	ConnectionId  uint64 `json:"connectionId" gorm:"primaryKey"`
+	ScopeConfigId uint64 `json:"scopeConfigId,omitempty"`
+	// agentready-specific fields
+	FullName string `gorm:"primaryKey;type:varchar(255)"`
+	Name     string `gorm:"type:varchar(255)"`
 }
 
 func (agentReadyScope20260604) TableName() string {
@@ -55,7 +65,14 @@ func (agentReadyScope20260604) TableName() string {
 }
 
 type agentReadyScopeConfig20260604 struct {
-	common.ScopeConfig `gorm:"embedded"`
+	// common.Model fields
+	ID        uint64    `gorm:"primaryKey"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// common.ScopeConfig fields
+	Entities     []string `gorm:"type:json;serializer:json" json:"entities"`
+	ConnectionId uint64   `json:"connectionId" gorm:"index"`
+	Name         string   `gorm:"type:varchar(255);uniqueIndex" json:"name"`
 }
 
 func (agentReadyScopeConfig20260604) TableName() string {
@@ -63,7 +80,13 @@ func (agentReadyScopeConfig20260604) TableName() string {
 }
 
 type agentReadyAssessment20260604 struct {
-	common.NoPKModel
+	// common.NoPKModel fields
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	RawDataParams string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
+	RawDataTable  string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
+	RawDataId     uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
+	RawDataRemark string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
 	Id                 string    `gorm:"primaryKey;type:varchar(255)"`
 	RepoId             string    `gorm:"index;type:varchar(255)"`
 	RepoName           string    `gorm:"type:varchar(255)"`
@@ -87,7 +110,13 @@ func (agentReadyAssessment20260604) TableName() string {
 }
 
 type agentReadyFinding20260604 struct {
-	common.NoPKModel
+	// common.NoPKModel fields
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	RawDataParams string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
+	RawDataTable  string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
+	RawDataId     uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
+	RawDataRemark string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
 	Id                 string   `gorm:"primaryKey;type:varchar(255)"`
 	ConnectionId       uint64   `gorm:"primaryKey"`
 	AssessmentId       string   `gorm:"index;type:varchar(255)"`
@@ -111,7 +140,13 @@ func (agentReadyFinding20260604) TableName() string {
 }
 
 type agentReadyMetric20260604 struct {
-	common.NoPKModel
+	// common.NoPKModel fields
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	RawDataParams string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
+	RawDataTable  string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
+	RawDataId     uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
+	RawDataRemark string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
 	Id             string    `gorm:"primaryKey;type:varchar(255)"`
 	ConnectionId   uint64    `gorm:"primaryKey"`
 	RepoId         string    `gorm:"index;type:varchar(255)"`
