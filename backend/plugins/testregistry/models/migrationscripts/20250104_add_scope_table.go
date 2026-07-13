@@ -64,4 +64,3 @@ func (*addScopeTable) Version() uint64 {
 func (*addScopeTable) Name() string {
 	return "add scope table for testregistry"
 }
-

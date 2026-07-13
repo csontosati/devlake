@@ -39,8 +39,8 @@ type codecovRepoConfig20260616 struct {
 	ConnectionId uint64 `gorm:"primaryKey;type:bigint"`
 	RepoId       string `gorm:"primaryKey;type:varchar(200)"`
 	// fields
-	ConfigSource         string   `gorm:"type:varchar(50)"`
-	RawYaml              string   `gorm:"type:text"`
+	ConfigSource         string `gorm:"type:varchar(50)"`
+	RawYaml              string `gorm:"type:text"`
 	ProjectTarget        *float64
 	ProjectTargetAuto    bool
 	ProjectThreshold     *float64

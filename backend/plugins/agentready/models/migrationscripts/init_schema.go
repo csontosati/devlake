@@ -6,7 +6,7 @@ The ASF licenses this file to You under the Apache License, Version 2.0
 (the "License"); you may not use this file except in compliance with
 the License.  You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -81,12 +81,12 @@ func (agentReadyScopeConfig20260604) TableName() string {
 
 type agentReadyAssessment20260604 struct {
 	// common.NoPKModel fields
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	RawDataParams string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
-	RawDataTable  string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
-	RawDataId     uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
-	RawDataRemark string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+	RawDataParams      string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
+	RawDataTable       string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
+	RawDataId          uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
+	RawDataRemark      string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
 	Id                 string    `gorm:"primaryKey;type:varchar(255)"`
 	RepoId             string    `gorm:"index;type:varchar(255)"`
 	RepoName           string    `gorm:"type:varchar(255)"`
@@ -111,28 +111,28 @@ func (agentReadyAssessment20260604) TableName() string {
 
 type agentReadyFinding20260604 struct {
 	// common.NoPKModel fields
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	RawDataParams string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
-	RawDataTable  string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
-	RawDataId     uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
-	RawDataRemark string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
-	Id                 string   `gorm:"primaryKey;type:varchar(255)"`
-	ConnectionId       uint64   `gorm:"primaryKey"`
-	AssessmentId       string   `gorm:"index;type:varchar(255)"`
-	RepoId             string   `gorm:"index;type:varchar(255)"`
-	AttributeId        string   `gorm:"type:varchar(255)"`
-	AttributeName      string   `gorm:"type:varchar(255)"`
-	Category           string   `gorm:"type:varchar(255)"`
-	Tier               int      `gorm:"type:int"`
-	Status             string   `gorm:"type:varchar(50)"`
-	Score              *float64 `gorm:"type:float"`
-	MeasuredValue      string   `gorm:"type:text"`
-	Threshold          string   `gorm:"type:text"`
-	Evidence           string   `gorm:"type:text"`
-	RemediationSummary string   `gorm:"type:text"`
-	RemediationSteps   string   `gorm:"type:text"`
-	DefaultWeight      float64  `gorm:"type:float"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+	RawDataParams      string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
+	RawDataTable       string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
+	RawDataId          uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
+	RawDataRemark      string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
+	Id                 string    `gorm:"primaryKey;type:varchar(255)"`
+	ConnectionId       uint64    `gorm:"primaryKey"`
+	AssessmentId       string    `gorm:"index;type:varchar(255)"`
+	RepoId             string    `gorm:"index;type:varchar(255)"`
+	AttributeId        string    `gorm:"type:varchar(255)"`
+	AttributeName      string    `gorm:"type:varchar(255)"`
+	Category           string    `gorm:"type:varchar(255)"`
+	Tier               int       `gorm:"type:int"`
+	Status             string    `gorm:"type:varchar(50)"`
+	Score              *float64  `gorm:"type:float"`
+	MeasuredValue      string    `gorm:"type:text"`
+	Threshold          string    `gorm:"type:text"`
+	Evidence           string    `gorm:"type:text"`
+	RemediationSummary string    `gorm:"type:text"`
+	RemediationSteps   string    `gorm:"type:text"`
+	DefaultWeight      float64   `gorm:"type:float"`
 }
 
 func (agentReadyFinding20260604) TableName() string {
@@ -141,12 +141,12 @@ func (agentReadyFinding20260604) TableName() string {
 
 type agentReadyMetric20260604 struct {
 	// common.NoPKModel fields
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	RawDataParams string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
-	RawDataTable  string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
-	RawDataId     uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
-	RawDataRemark string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	RawDataParams  string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
+	RawDataTable   string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
+	RawDataId      uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
+	RawDataRemark  string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
 	Id             string    `gorm:"primaryKey;type:varchar(255)"`
 	ConnectionId   uint64    `gorm:"primaryKey"`
 	RepoId         string    `gorm:"index;type:varchar(255)"`

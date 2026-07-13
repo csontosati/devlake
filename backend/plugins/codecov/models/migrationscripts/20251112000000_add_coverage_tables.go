@@ -42,7 +42,7 @@ type codecovFlag20251112 struct {
 	// fields
 	Carryforward bool
 	Deleted      bool
-	Yaml         string   `gorm:"type:text"`
+	Yaml         string `gorm:"type:text"`
 	Coverage     *float64
 }
 

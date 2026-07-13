@@ -77,4 +77,3 @@ func (*addPatchToCoverages) Version() uint64 {
 func (*addPatchToCoverages) Name() string {
 	return "Codecov add Patch to coverages table"
 }
-
