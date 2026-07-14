@@ -21,7 +21,7 @@ import (
 	"regexp"
 
 	"github.com/apache/incubator-devlake/core/errors"
-	"github.com/apache/incubator-devlake/helpers/gcshelper"
+	"github.com/apache/incubator-devlake/pkg/gcshelper"
 	helper "github.com/apache/incubator-devlake/helpers/pluginhelper/api"
 	"github.com/apache/incubator-devlake/plugins/aireview/models"
 )
