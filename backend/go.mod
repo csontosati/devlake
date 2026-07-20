@@ -46,7 +46,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/gin-contrib/cors v1.7.2
 	github.com/go-sql-driver/mysql v1.7.1
-	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/konflux-ci/coverport/instrumentation/go v0.0.0-20260708090559-a0c568e41e08
 	github.com/merico-ai/graphql v0.0.0-20260206020408-b7fd267bcfac
 	github.com/rogpeppe/go-internal v1.13.1
