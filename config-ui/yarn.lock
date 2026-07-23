@@ -2952,8 +2952,8 @@ __metadata:
   linkType: hard
 
 "@testing-library/jest-dom@npm:^6.9.1":
-  version: 6.9.1
-  resolution: "@testing-library/jest-dom@npm:6.9.1"
+  version: 6.10.0
+  resolution: "@testing-library/jest-dom@npm:6.10.0"
   dependencies:
     "@adobe/css-tools": ^4.4.0
     aria-query: ^5.0.0
@@ -2961,7 +2961,9 @@ __metadata:
     dom-accessibility-api: ^0.6.3
     picocolors: ^1.1.1
     redent: ^3.0.0
-  checksum: 5c77126a59a1c0df5935d29569652364c56e5026982f0357f0daaeb21b75fcd9a6aeff8365bdcba719687a4359b3f8bf74bba81ccbae7635cf18ad9789e1e323
+  peerDependencies:
+    "@testing-library/dom": ">=10 <11"
+  checksum: 78f81628ebc50427a704c62178b71262ceef970b6d641ff22365eeb8fe150953f60fe10641c42a1e297e8cd018b8262a4bbc4d2a25858302a023fe7e2223749d
   languageName: node
   linkType: hard
 
