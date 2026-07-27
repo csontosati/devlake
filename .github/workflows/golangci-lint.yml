@@ -51,7 +51,7 @@ jobs:
           cd backend
           make mock
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
           cache: false
