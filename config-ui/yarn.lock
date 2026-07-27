@@ -2951,9 +2951,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@testing-library/jest-dom@npm:^6.9.1":
-  version: 6.9.1
-  resolution: "@testing-library/jest-dom@npm:6.9.1"
+"@testing-library/jest-dom@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "@testing-library/jest-dom@npm:7.0.0"
   dependencies:
     "@adobe/css-tools": ^4.4.0
     aria-query: ^5.0.0
@@ -2961,7 +2961,9 @@ __metadata:
     dom-accessibility-api: ^0.6.3
     picocolors: ^1.1.1
     redent: ^3.0.0
-  checksum: 5c77126a59a1c0df5935d29569652364c56e5026982f0357f0daaeb21b75fcd9a6aeff8365bdcba719687a4359b3f8bf74bba81ccbae7635cf18ad9789e1e323
+  peerDependencies:
+    "@testing-library/dom": ">=10 <11"
+  checksum: 744bbab55ce776bfbd07bac36ce9ed1a00e2445c76752fea7a179610f628ad052f341c0eb92a7cb6b59e4913796149b306b2316e55f3ec98ff9ee4aff9666e78
   languageName: node
   linkType: hard
 
@@ -4371,7 +4373,7 @@ __metadata:
     "@ahooksjs/use-url-state": ^3.5.1
     "@ant-design/icons": ^5.3.0
     "@reduxjs/toolkit": ^2.2.1
-    "@testing-library/jest-dom": ^6.9.1
+    "@testing-library/jest-dom": ^7.0.0
     "@testing-library/react": ^16.3.2
     "@types/file-saver": ^2.0.5
     "@types/node": ^18.19.20
