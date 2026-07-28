@@ -46,25 +46,25 @@ func ConvertCommitCoverage(taskCtx plugin.SubTaskContext) errors.Error {
 	var commits []models.CodecovCommit
 	err := db.All(&commits, dal.Where("connection_id = ? AND repo_id = ?", data.Options.ConnectionId, data.Options.FullName))
 	if err != nil {
-		return err
+		return errors.Default.Wrap(err, "failed to pre-load commits for commit coverage conversion")
 	}
 	commitMap := make(map[string]*models.CodecovCommit, len(commits))
 	for i := range commits {
 		commitMap[commits[i].CommitSha] = &commits[i]
 	}
-	taskCtx.GetLogger().Info("ConvertCommitCoverage: pre-loaded %d commits into memory", len(commitMap))
+	taskCtx.GetLogger().Info("[ConvertCommitCoverage] pre-loaded %d commits into memory", len(commitMap))
 
 	// Pre-load comparison data with empty flag (overall comparisons) for this repo
 	var comparisons []ComparisonData
 	err = db.All(&comparisons, dal.Where("connection_id = ? AND repo_id = ? AND flag_name = ?", data.Options.ConnectionId, data.Options.FullName, ""))
 	if err != nil {
-		return err
+		return errors.Default.Wrap(err, "failed to pre-load comparisons for commit coverage conversion")
 	}
 	comparisonMap := make(map[string]*ComparisonData, len(comparisons))
 	for i := range comparisons {
 		comparisonMap[comparisons[i].CommitSha] = &comparisons[i]
 	}
-	taskCtx.GetLogger().Info("ConvertCommitCoverage: pre-loaded %d comparisons into memory", len(comparisonMap))
+	taskCtx.GetLogger().Info("[ConvertCommitCoverage] pre-loaded %d comparisons into memory", len(comparisonMap))
 
 	extractor, err := helper.NewApiExtractor(helper.ApiExtractorArgs{
 		RawDataSubTaskArgs: helper.RawDataSubTaskArgs{
