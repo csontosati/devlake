@@ -30,16 +30,12 @@ func TestConnectionTableName(t *testing.T) {
 
 func TestConnectionSanitize(t *testing.T) {
 	conn := AgentReadyConnection{
-		Project:            "my-project",
 		GitHubConnectionId: 42,
 		SubmissionsRepo:    "ambient-code/agentready",
 		SubmissionsPath:    "submissions",
 		Branch:             "main",
 	}
 	sanitized := conn.Sanitize()
-	if sanitized.Project != "my-project" {
-		t.Errorf("Sanitize() changed Project")
-	}
 	if sanitized.SubmissionsRepo != "ambient-code/agentready" {
 		t.Errorf("Sanitize() changed SubmissionsRepo")
 	}

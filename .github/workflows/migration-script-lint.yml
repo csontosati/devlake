@@ -22,6 +22,14 @@ on:
       - v*
     branches:
       - main
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**/migrationscripts/**'
+
+permissions:
+  contents: read
+
 jobs:
   migration-script-lint:
     name: migration-script-lint
