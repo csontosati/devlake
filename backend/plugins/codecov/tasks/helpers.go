@@ -18,6 +18,7 @@ limitations under the License.
 package tasks
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/apache/incubator-devlake/core/errors"
@@ -30,4 +31,18 @@ func ParseFullName(fullName string) (owner, repo string, err errors.Error) {
 		return "", "", errors.BadInput.New("invalid fullName format, expected 'owner/repo'")
 	}
 	return parts[0], parts[1], nil
+}
+
+// RepoAPIPrefix builds the Codecov API v2 path prefix for a repo:
+//
+//	api/v2/{service}/{owner}/repos/{repo}
+func RepoAPIPrefix(service, owner, repo string) string {
+	return fmt.Sprintf("api/v2/%s/%s/repos/%s", service, owner, repo)
+}
+
+// OwnerAPIPrefix builds the Codecov API v2 path prefix for an owner:
+//
+//	/api/v2/{service}/{owner}
+func OwnerAPIPrefix(service, owner string) string {
+	return fmt.Sprintf("/api/v2/%s/%s", service, owner)
 }

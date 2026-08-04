@@ -29,24 +29,30 @@ import (
 // --- buildRawContentURL ---
 
 func TestBuildRawContentURL_GitHub(t *testing.T) {
-	url := buildRawContentURL("github", "konflux-ci", "build-service", "main", ".codecov.yml")
+	url := buildRawContentURL("github", "konflux-ci", "build-service", "main", ".codecov.yml", "")
 	assert.Equal(t, "https://raw.githubusercontent.com/konflux-ci/build-service/main/.codecov.yml", url)
 }
 
 func TestBuildRawContentURL_GitLab(t *testing.T) {
-	url := buildRawContentURL("gitlab", "konflux-ci", "build-service", "main", "codecov.yml")
+	url := buildRawContentURL("gitlab", "konflux-ci", "build-service", "main", "codecov.yml", "")
 	assert.Contains(t, url, "gitlab.com/api/v4/projects/")
 	assert.Contains(t, url, "raw?ref=main")
 }
 
-func TestBuildRawContentURL_GitLabEnterprise(t *testing.T) {
-	url := buildRawContentURL("gitlab_enterprise", "myorg", "myrepo", "develop", ".codecov.yml")
-	assert.Contains(t, url, "gitlab.cee.redhat.com/api/v4/projects/")
+func TestBuildRawContentURL_GitLabEnterprise_WithHost(t *testing.T) {
+	url := buildRawContentURL("gitlab_enterprise", "myorg", "myrepo", "develop", ".codecov.yml", "https://gitlab.example.com")
+	assert.Contains(t, url, "gitlab.example.com/api/v4/projects/")
+	assert.Contains(t, url, "raw?ref=develop")
+}
+
+func TestBuildRawContentURL_GitLabEnterprise_NoHost(t *testing.T) {
+	url := buildRawContentURL("gitlab_enterprise", "myorg", "myrepo", "develop", ".codecov.yml", "")
+	assert.Contains(t, url, "gitlab.com/api/v4/projects/")
 	assert.Contains(t, url, "raw?ref=develop")
 }
 
 func TestBuildRawContentURL_UnsupportedService(t *testing.T) {
-	url := buildRawContentURL("bitbucket", "owner", "repo", "main", "codecov.yml")
+	url := buildRawContentURL("bitbucket", "owner", "repo", "main", "codecov.yml", "")
 	assert.Equal(t, "", url)
 }
 

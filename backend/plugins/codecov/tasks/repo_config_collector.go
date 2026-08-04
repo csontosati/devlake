@@ -80,10 +80,7 @@ func CollectRepoConfig(taskCtx plugin.SubTaskContext) errors.Error {
 		return nil
 	}
 
-	service := data.Repo.Service
-	if service == "" {
-		service = "github"
-	}
+	service := data.Service
 	branch := data.Repo.Branch
 	if branch == "" {
 		logger.Warn(nil, "[Codecov] CollectRepoConfig: No branch configured for %s/%s, skipping", owner, repo)
@@ -101,7 +98,7 @@ func CollectRepoConfig(taskCtx plugin.SubTaskContext) errors.Error {
 	var rawYaml string
 
 	for _, filename := range configFileNames {
-		rawURL := buildRawContentURL(service, owner, repo, branch, filename)
+		rawURL := buildRawContentURL(service, owner, repo, branch, filename, "")
 		if rawURL == "" {
 			logger.Warn(nil, "[Codecov] CollectRepoConfig: unsupported service %q, skipping", service)
 			break
@@ -151,21 +148,28 @@ func CollectRepoConfig(taskCtx plugin.SubTaskContext) errors.Error {
 	return nil
 }
 
-func buildRawContentURL(service, owner, repo, branch, filename string) string {
+func buildRawContentURL(service, owner, repo, branch, filename, gitlabHost string) string {
 	switch service {
-	case "github":
+	case "github", "github_enterprise":
 		return fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", owner, repo, branch, filename)
 	case "gitlab":
-		projectPath := url.PathEscape(owner + "/" + repo)
-		encodedFile := url.PathEscape(filename)
-		return fmt.Sprintf("https://gitlab.com/api/v4/projects/%s/repository/files/%s/raw?ref=%s", projectPath, encodedFile, branch)
+		return gitlabRawURL("https://gitlab.com", owner, repo, branch, filename)
 	case "gitlab_enterprise":
-		projectPath := url.PathEscape(owner + "/" + repo)
-		encodedFile := url.PathEscape(filename)
-		return fmt.Sprintf("https://gitlab.cee.redhat.com/api/v4/projects/%s/repository/files/%s/raw?ref=%s", projectPath, encodedFile, branch)
+		host := gitlabHost
+		if host == "" {
+			host = "https://gitlab.com"
+		}
+		return gitlabRawURL(host, owner, repo, branch, filename)
 	default:
 		return ""
 	}
+}
+
+func gitlabRawURL(host, owner, repo, branch, filename string) string {
+	host = strings.TrimRight(host, "/")
+	projectPath := url.PathEscape(owner + "/" + repo)
+	encodedFile := url.PathEscape(filename)
+	return fmt.Sprintf("%s/api/v4/projects/%s/repository/files/%s/raw?ref=%s", host, projectPath, encodedFile, branch)
 }
 
 const fetchTimeout = 15 * time.Second

@@ -18,28 +18,29 @@ limitations under the License.
 package migrationscripts
 
 import (
-	"github.com/apache/incubator-devlake/core/plugin"
+	"github.com/apache/incubator-devlake/core/context"
+	"github.com/apache/incubator-devlake/core/errors"
 )
 
-// All return all the migration scripts
-func All() []plugin.MigrationScript {
-	return []plugin.MigrationScript{
-		new(addInitTables),
-		new(addCoverageTables),
-		new(addRawDataOriginToCommits),
-		new(addRawDataOriginToFlags),
-		new(addComparisonTable),
-		new(addModifiedCoverageToCoverages),
-		new(addRawDataOriginToCoverageTables),
-		new(addRawDataOriginToComparisons),
-		new(addModifiedLinesToComparisons),
-		new(addPatchToCoverages),
-		new(addPatchToComparisons),
-		new(addCoverageToFlags),
-		new(addLineCountsToCommitCoverages),
-		new(fixCommitsDedupAndDropId),
-		new(addRepoConfigTable),
-		new(dedupRawTables),
-		new(addServiceToConnections),
-	}
+type addServiceToConnections struct{}
+
+func (*addServiceToConnections) Up(basicRes context.BasicRes) errors.Error {
+	db := basicRes.GetDal()
+	return db.AutoMigrate(&addServiceToConnections20260804{})
+}
+
+func (*addServiceToConnections) Version() uint64 {
+	return 20260804000000
+}
+
+func (*addServiceToConnections) Name() string {
+	return "Codecov add service field to connections for multi-service support"
+}
+
+type addServiceToConnections20260804 struct {
+	Service string `gorm:"column:service;type:varchar(100);default:github"`
+}
+
+func (addServiceToConnections20260804) TableName() string {
+	return "_tool_codecov_connections"
 }
