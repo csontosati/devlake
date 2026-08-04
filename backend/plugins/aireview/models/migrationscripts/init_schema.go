@@ -105,15 +105,17 @@ func (aiReviewFinding20260127) TableName() string {
 }
 
 type aiFailurePrediction20260127 struct {
-	// common.RawDataOrigin fields (from NoPKModel)
-	RawDataParams         string `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
-	RawDataTable          string `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
-	RawDataId             uint64 `gorm:"column:_raw_data_id" json:"_raw_data_id"`
-	RawDataRemark         string `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
-	Id                    string `gorm:"primaryKey;type:varchar(255)"`
-	PullRequestId         string `gorm:"index;type:varchar(255)"`
-	RepoId                string `gorm:"index;type:varchar(255)"`
-	AiTool                string `gorm:"type:varchar(100)"`
+	// common.NoPKModel fields
+	CreatedAt             time.Time `json:"createdAt"`
+	UpdatedAt             time.Time `json:"updatedAt"`
+	RawDataParams         string    `gorm:"column:_raw_data_params;type:varchar(255);index" json:"_raw_data_params"`
+	RawDataTable          string    `gorm:"column:_raw_data_table;type:varchar(255)" json:"_raw_data_table"`
+	RawDataId             uint64    `gorm:"column:_raw_data_id" json:"_raw_data_id"`
+	RawDataRemark         string    `gorm:"column:_raw_data_remark" json:"_raw_data_remark"`
+	Id                    string    `gorm:"primaryKey;type:varchar(255)"`
+	PullRequestId         string    `gorm:"index;type:varchar(255)"`
+	RepoId                string    `gorm:"index;type:varchar(255)"`
+	AiTool                string    `gorm:"type:varchar(100)"`
 	WasFlaggedRisky       bool
 	RiskScore             int
 	FlaggedAt             time.Time
@@ -128,8 +130,6 @@ type aiFailurePrediction20260127 struct {
 	PredictionOutcome     string `gorm:"type:varchar(20)"`
 	ObservationWindowDays int
 	ObservationEndDate    time.Time
-	CreatedAt             time.Time
-	UpdatedAt             *time.Time
 }
 
 func (aiFailurePrediction20260127) TableName() string {
