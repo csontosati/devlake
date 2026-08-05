@@ -290,7 +290,7 @@ func searchReposForOwner(
 
 	if res.StatusCode == http.StatusNotFound {
 		_ = res.Body.Close()
-		return nil, nil
+		return []dsmodels.DsRemoteApiScopeListEntry[models.CodecovRepo]{}, nil
 	}
 	if res.StatusCode != http.StatusOK {
 		_ = res.Body.Close()

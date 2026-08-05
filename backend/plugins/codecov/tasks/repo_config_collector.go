@@ -98,7 +98,7 @@ func CollectRepoConfig(taskCtx plugin.SubTaskContext) errors.Error {
 	var rawYaml string
 
 	for _, filename := range configFileNames {
-		rawURL := buildRawContentURL(service, owner, repo, branch, filename, "")
+		rawURL := buildRawContentURL(service, owner, repo, branch, filename)
 		if rawURL == "" {
 			logger.Warn(nil, "[Codecov] CollectRepoConfig: unsupported service %q, skipping", service)
 			break
@@ -148,19 +148,15 @@ func CollectRepoConfig(taskCtx plugin.SubTaskContext) errors.Error {
 	return nil
 }
 
-func buildRawContentURL(service, owner, repo, branch, filename, gitlabHost string) string {
+func buildRawContentURL(service, owner, repo, branch, filename string) string {
 	switch service {
-	case "github", "github_enterprise":
+	case "github":
 		return fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", owner, repo, branch, filename)
 	case "gitlab":
 		return gitlabRawURL("https://gitlab.com", owner, repo, branch, filename)
-	case "gitlab_enterprise":
-		host := gitlabHost
-		if host == "" {
-			host = "https://gitlab.com"
-		}
-		return gitlabRawURL(host, owner, repo, branch, filename)
 	default:
+		// Enterprise services (github_enterprise, gitlab_enterprise, bitbucket, bitbucket_server)
+		// require the Git host URL which isn't part of the Codecov connection config.
 		return ""
 	}
 }

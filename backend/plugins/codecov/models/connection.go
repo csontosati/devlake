@@ -109,7 +109,9 @@ func (connection *CodecovConnection) Merge(existed, modified *CodecovConnection,
 	existedTokenStr := existed.Token
 	existed.Name = modified.Name
 	existed.Organization = modified.Organization
-	existed.Service = modified.Service
+	if _, ok := body["service"]; ok {
+		existed.Service = modified.Service
+	}
 	existed.Proxy = modified.Proxy
 	existed.Endpoint = modified.Endpoint
 	existed.RateLimitPerHour = modified.RateLimitPerHour
