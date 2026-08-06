@@ -39,4 +39,3 @@ func ParseFullName(fullName string) (owner, repo string, err errors.Error) {
 func RepoAPIPrefix(service, owner, repo string) string {
 	return fmt.Sprintf("api/v2/%s/%s/repos/%s", service, owner, repo)
 }
-
