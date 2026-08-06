@@ -40,9 +40,3 @@ func RepoAPIPrefix(service, owner, repo string) string {
 	return fmt.Sprintf("api/v2/%s/%s/repos/%s", service, owner, repo)
 }
 
-// OwnerAPIPrefix builds the Codecov API v2 path prefix for an owner:
-//
-//	/api/v2/{service}/{owner}
-func OwnerAPIPrefix(service, owner string) string {
-	return fmt.Sprintf("/api/v2/%s/%s", service, owner)
-}

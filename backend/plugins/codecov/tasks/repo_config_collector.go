@@ -163,6 +163,7 @@ func buildRawContentURL(service, owner, repo, branch, filename string) string {
 
 func gitlabRawURL(host, owner, repo, branch, filename string) string {
 	host = strings.TrimRight(host, "/")
+	owner = strings.ReplaceAll(owner, ":", "/")
 	projectPath := url.PathEscape(owner + "/" + repo)
 	encodedFile := url.PathEscape(filename)
 	return fmt.Sprintf("%s/api/v4/projects/%s/repository/files/%s/raw?ref=%s", host, projectPath, encodedFile, branch)
