@@ -97,3 +97,23 @@ identical semantics, eliminating the `golang.org/x/exp` import entirely.
 
 **Rebase notes:** If upstream changes `GenericModel`, check whether they still reference
 `golang.org/x/exp/constraints` and reapply the inline if needed.
+
+## docker-compose-dev: local UBI image builds
+
+**Files:**
+- `docker-compose-dev.yml`
+
+**Reason:** Points `devlake` and `config-ui` builds at UBI Containerfiles
+(`dockerfile: Containerfile`) and tags images as `localhost/devlake-*:local`
+instead of personal Quay tags / Apache Scarf images.
+
+**Upstream status:** N/A — Konflux local-dev compose customization.
+**Upstream PR:** none — not applicable
+**Owner:** @fmuntean
+
+**Rebase notes:** If upstream regenerates `docker-compose-dev.yml`, re-add under
+`devlake` / `config-ui`: `dockerfile: Containerfile` and
+`image: localhost/devlake-backend:local` / `localhost/devlake-frontend:local`.
+
+(`backend/Containerfile` and `config-ui/Containerfile` are fork additions, not
+tracked here.)
