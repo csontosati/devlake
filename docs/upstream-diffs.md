@@ -46,7 +46,6 @@ domain layer. One-liner fix: `IsDraft: gitlabMr.WorkInProgress`.
 **Rebase notes:** Change is isolated to the struct literal in `mr_convertor.go`'s `Convert` func.
 No conflicts expected unless upstream touches the same field mapping block.
 
-## jira: Scope collectParentIssues to current board
 ## archived/base.go: inline Unsigned constraint
 
 **Files:**
