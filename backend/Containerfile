@@ -29,6 +29,9 @@ ARG GOPROXY=
 ARG HTTP_PROXY=
 ARG HTTPS_PROXY=
 ARG GO_VERSION=1.26.0
+# SHA-256 from https://go.dev/dl/?mode=json&include=all (go1.26.0 linux archives)
+ARG GO_SHA256_AMD64=aac1b08a0fb0c4e0a7c1555beb7b59180b05dfc5a3d62e40e9de90cd42f88235
+ARG GO_SHA256_ARM64=bd03b743eb6eb4193ea3c3fd3956546bf0e3ca5b7076c8226334afe6b75704cd
 
 ENV GOPROXY=${GOPROXY} \
     HTTP_PROXY=${HTTP_PROXY} \
@@ -57,7 +60,15 @@ RUN dnf -y update && \
     dnf clean all
 
 # Go toolchain must match the builder machine (BUILDARCH), not the target.
-RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${BUILDARCH}.tar.gz" | tar -C /usr/local -xz
+RUN case "${BUILDARCH}" in \
+        amd64) GO_SHA256="${GO_SHA256_AMD64}" ;; \
+        arm64) GO_SHA256="${GO_SHA256_ARM64}" ;; \
+        *) echo "unsupported BUILDARCH=${BUILDARCH}"; exit 1 ;; \
+    esac && \
+    curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-${BUILDARCH}.tar.gz" && \
+    echo "${GO_SHA256}  /tmp/go.tar.gz" | sha256sum -c - && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm -f /tmp/go.tar.gz
 
 RUN go install github.com/vektra/mockery/v2@v2.53.6 && \
     go install github.com/swaggo/swag/cmd/swag@v1.16.1
@@ -124,6 +135,9 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal@sha256:57c8151c51445a07e503dab9
 
 ARG TARGETARCH
 ARG TINI_VERSION=v0.19.0
+# SHA-256 from https://github.com/krallin/tini/releases/tag/v0.19.0 (*.sha256sum)
+ARG TINI_SHA256_AMD64=93dcc18adc78c65a028a84799ecf8ad40c936fdfc5f2a57b1acda5a8117fa82c
+ARG TINI_SHA256_ARM64=07952557df20bfd2a95f9bef198b445e006171969499a1d361bd9e6f8e5e0e81
 
 # ubi-minimal ships curl-minimal (conflicts with curl). Prefer it.
 RUN microdnf -y update && \
@@ -151,9 +165,15 @@ RUN microdnf -y update && \
     microdnf clean all && \
     rm -rf /var/cache/yum /var/cache/dnf
 
-# tini is not in UBI repos; install static binary
-RUN curl -fsSL -o /usr/bin/tini \
+# tini is not in UBI repos; install static binary with checksum verification
+RUN case "${TARGETARCH}" in \
+        amd64) TINI_SHA256="${TINI_SHA256_AMD64}" ;; \
+        arm64) TINI_SHA256="${TINI_SHA256_ARM64}" ;; \
+        *) echo "unsupported TARGETARCH=${TARGETARCH}"; exit 1 ;; \
+    esac && \
+    curl -fsSL -o /usr/bin/tini \
         "https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${TARGETARCH}" && \
+    echo "${TINI_SHA256}  /usr/bin/tini" | sha256sum -c - && \
     chmod +x /usr/bin/tini
 
 EXPOSE 8080
