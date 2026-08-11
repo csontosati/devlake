@@ -21,7 +21,10 @@ ARG TINI_VERSION=v0.19.0
 # Pin to multi-arch manifest digest (not :latest) for reproducible builds.
 FROM registry.access.redhat.com/ubi9/ubi@sha256:9d99826a5299a54fa92e9b47d74e6cd72efb04cb57eb8fe748ed93e08ebb6184 AS builder
 
-ARG TARGETARCH=amd64
+# Do not default TARGETARCH/BUILDARCH — a default shadows BuildKit's auto values
+# (e.g. CI on ubuntu-24.04-arm would download amd64 Go and hit Exec format error).
+ARG BUILDARCH
+ARG TARGETARCH
 ARG GOPROXY=
 ARG HTTP_PROXY=
 ARG HTTPS_PROXY=
@@ -53,7 +56,8 @@ RUN dnf -y update && \
         which && \
     dnf clean all
 
-RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz" | tar -C /usr/local -xz
+# Go toolchain must match the builder machine (BUILDARCH), not the target.
+RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${BUILDARCH}.tar.gz" | tar -C /usr/local -xz
 
 RUN go install github.com/vektra/mockery/v2@v2.53.6 && \
     go install github.com/swaggo/swag/cmd/swag@v1.16.1
@@ -92,10 +96,11 @@ WORKDIR /app
 COPY . /app
 ENV GOBIN=/app/bin
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 ARG TAG=
 ARG SHA=
 ARG GO_PLUGINS=
+ARG DEVLAKE_COVER=
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     export PKG_CONFIG_PATH=/usr/local/deps/target/lib/pkgconfig && \
@@ -104,6 +109,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     export CGO_LDFLAGS="-L/usr/local/deps/target/lib -Wl,-rpath,/usr/local/deps/target/lib" && \
     export GOARCH="${TARGETARCH}" && \
     export GOMAXPROCS=4 && \
+    export DEVLAKE_COVER="$DEVLAKE_COVER" && \
     DEVLAKE_PLUGINS="$GO_PLUGINS" make all
 
 # remove symlink in lib, we will recreate in final image
@@ -116,7 +122,7 @@ RUN cd /usr/local/deps/target/lib && \
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal@sha256:57c8151c51445a07e503dab9dc9211dc3cdeac9d45ed81a10954b7d770659b3b AS base
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 ARG TINI_VERSION=v0.19.0
 
 # ubi-minimal ships curl-minimal (conflicts with curl). Prefer it.
