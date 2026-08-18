@@ -157,7 +157,8 @@ func fetchBoardMembership(data *JiraTaskData, boardId uint64, issues []struct {
 		path := fmt.Sprintf("agile/1.0/board/%d/issue", boardId)
 		jql := fmt.Sprintf("issue IN (%s)", strings.Join(keys, ","))
 
-		for startAt := 0; ; startAt += staleBoardIssueCheckBatchSize {
+		pageSize := 0
+		for startAt := 0; ; startAt += pageSize {
 			query := url.Values{}
 			query.Set("jql", jql)
 			query.Set("startAt", fmt.Sprintf("%d", startAt))
@@ -209,7 +210,8 @@ func fetchBoardMembership(data *JiraTaskData, boardId uint64, issues []struct {
 				onBoard[issue.Key] = true
 			}
 
-			if startAt+len(result.Issues) >= result.Total {
+			pageSize = len(result.Issues)
+			if startAt+pageSize >= result.Total {
 				break
 			}
 		}

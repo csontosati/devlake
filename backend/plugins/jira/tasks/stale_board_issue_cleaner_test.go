@@ -179,7 +179,8 @@ func TestFetchBoardMembership_NonOKStatusReturnsError(t *testing.T) {
 }
 
 func TestFetchBoardMembership_PaginationFetchesAllPages(t *testing.T) {
-	// API returns 3 issues total but only 2 per page → 2 requests.
+	// API returns 3 issues total but only 2 per page (short of maxResults=100).
+	// Next startAt must be 2, not 100 — otherwise PROJ-3 is skipped and treated as off-board.
 	issues := []struct {
 		IssueKey string
 		IssueId  uint64
@@ -189,17 +190,17 @@ func TestFetchBoardMembership_PaginationFetchesAllPages(t *testing.T) {
 		{"PROJ-3", 3},
 	}
 
-	requestCount := 0
+	var startAts []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		startAt := r.URL.Query().Get("startAt")
-		requestCount++
+		startAts = append(startAts, startAt)
 		var resp boardResponse
 		if startAt == "0" || startAt == "" {
 			resp = boardResponse{
 				Total:  3,
 				Issues: []boardRespIssue{{Key: "PROJ-1"}, {Key: "PROJ-2"}},
 			}
-		} else if startAt == "100" {
+		} else if startAt == "2" {
 			resp = boardResponse{
 				Total:  3,
 				Issues: []boardRespIssue{{Key: "PROJ-3"}},
@@ -216,12 +217,58 @@ func TestFetchBoardMembership_PaginationFetchesAllPages(t *testing.T) {
 	data := buildTestTaskData(srv.URL, 1, 42)
 	onBoard, err := fetchBoardMembership(data, 42, issues)
 	assert.NoError(t, err)
-	assert.Equal(t, 2, requestCount)
+	assert.Equal(t, []string{"0", "2"}, startAts)
 	assert.Equal(t, map[string]bool{
 		"PROJ-1": true,
 		"PROJ-2": true,
 		"PROJ-3": true,
 	}, onBoard)
+}
+
+func TestFetchBoardMembership_ShortPageDoesNotSkipIssues(t *testing.T) {
+	// Jira often caps a page below maxResults (e.g. 50 of 80). Stepping startAt by 100
+	// would skip keys 50–79 and delete their board associations.
+	issues := make([]struct {
+		IssueKey string
+		IssueId  uint64
+	}, 80)
+	for i := range issues {
+		issues[i] = struct {
+			IssueKey string
+			IssueId  uint64
+		}{fmt.Sprintf("PROJ-%d", i+1), uint64(i + 1)}
+	}
+
+	var startAts []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startAt := r.URL.Query().Get("startAt")
+		startAts = append(startAts, startAt)
+		var from, to int
+		switch startAt {
+		case "0", "":
+			from, to = 0, 50
+		case "50":
+			from, to = 50, 80
+		default:
+			http.Error(w, "skipped issues; startAt="+startAt, http.StatusBadRequest)
+			return
+		}
+		respIssues := make([]boardRespIssue, 0, to-from)
+		for i := from; i < to; i++ {
+			respIssues = append(respIssues, boardRespIssue{Key: fmt.Sprintf("PROJ-%d", i+1)})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(boardResponse{Total: 80, Issues: respIssues})
+	}))
+	defer srv.Close()
+
+	data := buildTestTaskData(srv.URL, 1, 42)
+	onBoard, err := fetchBoardMembership(data, 42, issues)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"0", "50"}, startAts)
+	assert.Len(t, onBoard, 80)
+	assert.True(t, onBoard["PROJ-51"])
+	assert.True(t, onBoard["PROJ-80"])
 }
 
 func TestFetchBoardMembership_EmptyPageWithZeroTotalMeansNoneOnBoard(t *testing.T) {
