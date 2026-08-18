@@ -23,11 +23,21 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	helperapi "github.com/apache/incubator-devlake/helpers/pluginhelper/api"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
+	"github.com/apache/incubator-devlake/core/errors"
+	"github.com/apache/incubator-devlake/core/models/domainlayer/ticket"
+	"github.com/apache/incubator-devlake/core/plugin"
+	helperapi "github.com/apache/incubator-devlake/helpers/pluginhelper/api"
+	mockdal "github.com/apache/incubator-devlake/mocks/core/dal"
+	mocklog "github.com/apache/incubator-devlake/mocks/core/log"
+	mockplugin "github.com/apache/incubator-devlake/mocks/core/plugin"
+	"github.com/apache/incubator-devlake/plugins/jira/models"
 )
 
 // buildTestTaskData creates a minimal JiraTaskData pointing ApiClient at the given server URL.
@@ -214,9 +224,32 @@ func TestFetchBoardMembership_PaginationFetchesAllPages(t *testing.T) {
 	}, onBoard)
 }
 
-func TestFetchBoardMembership_EmptyPageBreaksLoop(t *testing.T) {
-	// Simulates permission filtering: API reports Total > 0 but returns 0 issues.
-	// The loop must break immediately instead of spinning indefinitely.
+func TestFetchBoardMembership_EmptyPageWithZeroTotalMeansNoneOnBoard(t *testing.T) {
+	issues := []struct {
+		IssueKey string
+		IssueId  uint64
+	}{
+		{"PROJ-1", 1},
+		{"PROJ-2", 2},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := boardResponse{Total: 0, Issues: []boardRespIssue{}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	data := buildTestTaskData(srv.URL, 1, 42)
+	onBoard, err := fetchBoardMembership(data, 42, issues)
+	assert.NoError(t, err)
+	assert.NotNil(t, onBoard)
+	assert.Empty(t, onBoard)
+}
+
+func TestFetchBoardMembership_EmptyPageWithTotalReturnsError(t *testing.T) {
+	// Permission filtering / inconsistent API: total>0 but issues=[].
+	// Must error (not return an empty map) so cleanup does not delete valid associations.
 	issues := []struct {
 		IssueKey string
 		IssueId  uint64
@@ -229,7 +262,7 @@ func TestFetchBoardMembership_EmptyPageBreaksLoop(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
 		resp := boardResponse{
-			Total:  5, // non-zero total but no issues returned (permission filtering)
+			Total:  5,
 			Issues: []boardRespIssue{},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -239,9 +272,48 @@ func TestFetchBoardMembership_EmptyPageBreaksLoop(t *testing.T) {
 
 	data := buildTestTaskData(srv.URL, 1, 42)
 	onBoard, err := fetchBoardMembership(data, 42, issues)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Nil(t, onBoard)
 	assert.Equal(t, 1, requestCount)
-	assert.Empty(t, onBoard)
+	assert.Contains(t, err.Error(), "incomplete board membership")
+}
+
+func TestFetchBoardMembership_EmptyLaterPageDoesNotReturnPartialMap(t *testing.T) {
+	// Full first page (100) with total still higher; next page (startAt=100) is empty.
+	issues := make([]struct {
+		IssueKey string
+		IssueId  uint64
+	}, 1)
+	issues[0] = struct {
+		IssueKey string
+		IssueId  uint64
+	}{"PROJ-1", 1}
+
+	page1 := make([]boardRespIssue, staleBoardIssueCheckBatchSize)
+	for i := range page1 {
+		page1[i] = boardRespIssue{Key: fmt.Sprintf("PROJ-%d", i+1)}
+	}
+
+	requestCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startAt := r.URL.Query().Get("startAt")
+		requestCount++
+		var resp boardResponse
+		if startAt == "0" || startAt == "" {
+			resp = boardResponse{Total: 150, Issues: page1}
+		} else {
+			resp = boardResponse{Total: 150, Issues: []boardRespIssue{}}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	data := buildTestTaskData(srv.URL, 1, 42)
+	onBoard, err := fetchBoardMembership(data, 42, issues)
+	assert.Error(t, err)
+	assert.Nil(t, onBoard)
+	assert.Equal(t, 2, requestCount)
 }
 
 func TestFetchBoardMembership_BatchesBigIssueListIntoMultipleAPIRequests(t *testing.T) {
@@ -288,4 +360,280 @@ func TestFetchBoardMembership_BatchesBigIssueListIntoMultipleAPIRequests(t *test
 	assert.Contains(t, jqlBatches[1], "PROJ-101")
 	assert.Contains(t, jqlBatches[1], "PROJ-150")
 	assert.Len(t, onBoard, 150)
+}
+
+type jiraPluginStub struct{}
+
+func (jiraPluginStub) Name() string { return "jira" }
+func (jiraPluginStub) RootPkgPath() string {
+	return "github.com/apache/incubator-devlake/plugins/jira"
+}
+func (jiraPluginStub) Description() string { return "" }
+
+var registerJiraOnce sync.Once
+
+func registerJiraPlugin(t *testing.T) {
+	t.Helper()
+	registerJiraOnce.Do(func() {
+		_ = plugin.RegisterPlugin("jira", jiraPluginStub{})
+	})
+}
+
+type boardIssueRow struct {
+	IssueKey string
+	IssueId  uint64
+}
+
+func setupCleanupMocks(t *testing.T, data *JiraTaskData) (*mockplugin.SubTaskContext, *mockdal.Dal, *mockdal.Transaction) {
+	t.Helper()
+	registerJiraPlugin(t)
+
+	ctx := new(mockplugin.SubTaskContext)
+	db := new(mockdal.Dal)
+	logger := new(mocklog.Logger)
+	tx := new(mockdal.Transaction)
+
+	ctx.On("GetData").Return(data)
+	ctx.On("GetDal").Return(db)
+	ctx.On("GetLogger").Return(logger)
+	logger.On("Info", mock.Anything, mock.Anything).Maybe()
+	logger.On("Warn", mock.Anything, mock.Anything, mock.Anything).Maybe()
+	logger.On("Debug", mock.Anything, mock.Anything).Maybe()
+
+	return ctx, db, tx
+}
+
+func stubBoardIssues(db *mockdal.Dal, rows []boardIssueRow, allErr errors.Error) {
+	if allErr != nil {
+		db.On("All", mock.Anything, mock.Anything).Return(allErr)
+		return
+	}
+	db.On("All", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		dest := args.Get(0).(*[]struct {
+			IssueKey string
+			IssueId  uint64
+		})
+		out := make([]struct {
+			IssueKey string
+			IssueId  uint64
+		}, len(rows))
+		for i, r := range rows {
+			out[i] = struct {
+				IssueKey string
+				IssueId  uint64
+			}{r.IssueKey, r.IssueId}
+		}
+		*dest = out
+	}).Return(nil)
+}
+
+func newCleanupHTTPServer(boardStatus int, onBoardKeys []string, issueStatus int) *httptest.Server {
+	if boardStatus == 0 {
+		boardStatus = http.StatusOK
+	}
+	if issueStatus == 0 {
+		issueStatus = http.StatusNotFound
+	}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/board/") {
+			if boardStatus != http.StatusOK {
+				w.WriteHeader(boardStatus)
+				return
+			}
+			issues := make([]boardRespIssue, 0, len(onBoardKeys))
+			for _, k := range onBoardKeys {
+				issues = append(issues, boardRespIssue{Key: k})
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(boardResponse{Total: len(issues), Issues: issues})
+			return
+		}
+		w.WriteHeader(issueStatus)
+	}))
+}
+
+func TestCleanupStaleBoardIssues(t *testing.T) {
+	tests := []struct {
+		name          string
+		allErr        errors.Error
+		boardIssues   []boardIssueRow
+		boardStatus   int
+		onBoardKeys   []string
+		issueStatus   int
+		deleteFailAt  int // 1 = tool-layer delete, 2 = domain-layer delete
+		commitErr     errors.Error
+		wantErr       bool
+		wantBegins    int
+		wantDeletes   int
+		wantCommits   int
+		wantRollbacks int
+	}{
+		{
+			name:    "All query fails",
+			allErr:  errors.Default.New("db down"),
+			wantErr: true,
+		},
+		{
+			name:        "no board issues",
+			boardIssues: nil,
+		},
+		{
+			name:        "board 404 skips cleanup",
+			boardIssues: []boardIssueRow{{"PROJ-1", 1}},
+			boardStatus: http.StatusNotFound,
+		},
+		{
+			name:        "board API 500",
+			boardIssues: []boardIssueRow{{"PROJ-1", 1}},
+			boardStatus: http.StatusInternalServerError,
+			wantErr:     true,
+		},
+		{
+			name:        "all issues still on board",
+			boardIssues: []boardIssueRow{{"PROJ-1", 1}, {"PROJ-2", 2}},
+			onBoardKeys: []string{"PROJ-1", "PROJ-2"},
+		},
+		{
+			name:        "stale issue deleted from both tables",
+			boardIssues: []boardIssueRow{{"PROJ-1", 1}, {"PROJ-2", 2}},
+			onBoardKeys: []string{"PROJ-1"},
+			wantBegins:  1,
+			wantDeletes: 2,
+			wantCommits: 1,
+		},
+		{
+			name:        "issue re-fetch failure still deletes",
+			boardIssues: []boardIssueRow{{"PROJ-2", 2}},
+			issueStatus: http.StatusInternalServerError,
+			wantBegins:  1,
+			wantDeletes: 2,
+			wantCommits: 1,
+		},
+		{
+			name:          "tool-layer delete failure rolls back",
+			boardIssues:   []boardIssueRow{{"PROJ-1", 1}},
+			deleteFailAt:  1,
+			wantBegins:    1,
+			wantDeletes:   1,
+			wantRollbacks: 1,
+		},
+		{
+			name:          "domain-layer delete failure rolls back",
+			boardIssues:   []boardIssueRow{{"PROJ-1", 1}},
+			deleteFailAt:  2,
+			wantBegins:    1,
+			wantDeletes:   2,
+			wantRollbacks: 1,
+		},
+		{
+			name:        "commit failure continues without error",
+			boardIssues: []boardIssueRow{{"PROJ-1", 1}},
+			commitErr:   errors.Default.New("commit failed"),
+			wantBegins:  1,
+			wantDeletes: 2,
+			wantCommits: 1,
+		},
+		{
+			name:        "two stale issues both deleted",
+			boardIssues: []boardIssueRow{{"PROJ-1", 1}, {"PROJ-2", 2}},
+			wantBegins:  2,
+			wantDeletes: 4,
+			wantCommits: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := buildTestTaskData("http://127.0.0.1:1", 1, 42)
+			if tt.allErr == nil && len(tt.boardIssues) > 0 {
+				srv := newCleanupHTTPServer(tt.boardStatus, tt.onBoardKeys, tt.issueStatus)
+				defer srv.Close()
+				data = buildTestTaskData(srv.URL, 1, 42)
+			}
+
+			ctx, db, tx := setupCleanupMocks(t, data)
+			stubBoardIssues(db, tt.boardIssues, tt.allErr)
+
+			if tt.wantBegins > 0 {
+				db.On("Begin").Return(tx).Times(tt.wantBegins)
+
+				switch tt.deleteFailAt {
+				case 1:
+					tx.On("Delete", mock.Anything, mock.Anything).Return(errors.Default.New("fk")).Once()
+				case 2:
+					tx.On("Delete", mock.Anything, mock.Anything).Return(nil).Once()
+					tx.On("Delete", mock.Anything, mock.Anything).Return(errors.Default.New("fk")).Once()
+				default:
+					tx.On("Delete", mock.Anything, mock.Anything).Return(nil).Times(tt.wantDeletes)
+				}
+
+				if tt.wantCommits > 0 {
+					tx.On("Commit").Return(tt.commitErr).Times(tt.wantCommits)
+				}
+				if tt.wantRollbacks > 0 {
+					tx.On("Rollback").Return(nil).Times(tt.wantRollbacks)
+				}
+			}
+
+			err := CleanupStaleBoardIssues(ctx)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			db.AssertNumberOfCalls(t, "Begin", tt.wantBegins)
+			if tt.wantBegins > 0 {
+				tx.AssertNumberOfCalls(t, "Delete", tt.wantDeletes)
+				tx.AssertNumberOfCalls(t, "Commit", tt.wantCommits)
+				tx.AssertNumberOfCalls(t, "Rollback", tt.wantRollbacks)
+			}
+		})
+	}
+}
+
+func TestCleanupStaleBoardIssues_DeletesToolThenDomain(t *testing.T) {
+	srv := newCleanupHTTPServer(http.StatusOK, nil, http.StatusNotFound)
+	defer srv.Close()
+
+	data := buildTestTaskData(srv.URL, 1, 42)
+	ctx, db, tx := setupCleanupMocks(t, data)
+	stubBoardIssues(db, []boardIssueRow{{"PROJ-9", 9}}, nil)
+
+	var deleted []string
+	db.On("Begin").Return(tx)
+	tx.On("Delete", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		switch args.Get(0).(type) {
+		case *models.JiraBoardIssue:
+			deleted = append(deleted, "tool")
+		case *ticket.BoardIssue:
+			deleted = append(deleted, "domain")
+		default:
+			t.Errorf("unexpected delete type %T", args.Get(0))
+		}
+	}).Return(nil)
+	tx.On("Commit").Return(nil)
+
+	err := CleanupStaleBoardIssues(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"tool", "domain"}, deleted)
+}
+
+func TestCleanupStaleBoardIssues_IncompleteMembershipDoesNotDelete(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := boardResponse{Total: 5, Issues: []boardRespIssue{}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	data := buildTestTaskData(srv.URL, 1, 42)
+	ctx, db, tx := setupCleanupMocks(t, data)
+	stubBoardIssues(db, []boardIssueRow{{"PROJ-1", 1}, {"PROJ-2", 2}}, nil)
+
+	err := CleanupStaleBoardIssues(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "incomplete board membership")
+	db.AssertNumberOfCalls(t, "Begin", 0)
+	tx.AssertNotCalled(t, "Delete")
 }

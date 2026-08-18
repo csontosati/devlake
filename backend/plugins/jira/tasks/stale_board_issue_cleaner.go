@@ -97,27 +97,8 @@ func CleanupStaleBoardIssues(taskCtx plugin.SubTaskContext) errors.Error {
 			logger.Warn(updateErr, "failed to update issue state for %s, will still remove board association", bi.IssueKey)
 		}
 
-		domainIssueId := issueIdGen.Generate(connectionId, bi.IssueId)
-		domainBoardId := boardIdGen.Generate(connectionId, boardId)
-
-		tx := db.Begin()
-		txErr := tx.Delete(
-			&models.JiraBoardIssue{},
-			dal.Where("connection_id = ? AND board_id = ? AND issue_id = ?", connectionId, boardId, bi.IssueId),
-		)
-		if txErr == nil {
-			txErr = tx.Delete(
-				&ticket.BoardIssue{},
-				dal.Where("board_id = ? AND issue_id = ?", domainBoardId, domainIssueId),
-			)
-		}
-		if txErr != nil {
-			_ = tx.Rollback()
-			logger.Warn(txErr, "failed to remove stale association for %s, will retry next run", bi.IssueKey)
-			continue
-		}
-		if commitErr := tx.Commit(); commitErr != nil {
-			logger.Warn(commitErr, "failed to commit stale association removal for %s, will retry next run", bi.IssueKey)
+		if delErr := removeBoardAssociation(db, issueIdGen, boardIdGen, connectionId, boardId, bi.IssueId); delErr != nil {
+			logger.Warn(delErr, "failed to remove stale association for %s, will retry next run", bi.IssueKey)
 			continue
 		}
 
@@ -128,9 +109,33 @@ func CleanupStaleBoardIssues(taskCtx plugin.SubTaskContext) errors.Error {
 	return nil
 }
 
+func removeBoardAssociation(db dal.Dal, issueIdGen, boardIdGen *didgen.DomainIdGenerator, connectionId, boardId, issueId uint64) errors.Error {
+	domainIssueId := issueIdGen.Generate(connectionId, issueId)
+	domainBoardId := boardIdGen.Generate(connectionId, boardId)
+
+	tx := db.Begin()
+	txErr := tx.Delete(
+		&models.JiraBoardIssue{},
+		dal.Where("connection_id = ? AND board_id = ? AND issue_id = ?", connectionId, boardId, issueId),
+	)
+	if txErr == nil {
+		txErr = tx.Delete(
+			&ticket.BoardIssue{},
+			dal.Where("board_id = ? AND issue_id = ?", domainBoardId, domainIssueId),
+		)
+	}
+	if txErr != nil {
+		_ = tx.Rollback()
+		return txErr
+	}
+	return tx.Commit()
+}
+
 // fetchBoardMembership batch-checks which issue keys are still on the board using
 // issue IN (...) JQL — 100 issues per API call instead of one call per issue.
 // Returns (nil, nil) when the board is not found (404), signalling the caller to skip cleanup.
+// Returns an error when a page is empty while total still claims more results, so the
+// caller does not treat a partial/empty map as "not on board".
 func fetchBoardMembership(data *JiraTaskData, boardId uint64, issues []struct {
 	IssueKey string
 	IssueId  uint64
@@ -190,11 +195,21 @@ func fetchBoardMembership(data *JiraTaskData, boardId uint64, issues []struct {
 				return nil, errors.Default.Wrap(jsonErr, "failed to parse board response")
 			}
 
+			if len(result.Issues) == 0 {
+				if result.Total > startAt {
+					return nil, errors.Default.New(fmt.Sprintf(
+						"incomplete board membership response for board %d: total=%d but issues=[] at startAt=%d",
+						boardId, result.Total, startAt,
+					))
+				}
+				break
+			}
+
 			for _, issue := range result.Issues {
 				onBoard[issue.Key] = true
 			}
 
-			if len(result.Issues) == 0 || startAt+len(result.Issues) >= result.Total {
+			if startAt+len(result.Issues) >= result.Total {
 				break
 			}
 		}
