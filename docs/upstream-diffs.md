@@ -142,3 +142,26 @@ If upstream changes Makefile image targets or Dockerfiles, re-point builds at
 
 (`backend/Containerfile` and `config-ui/Containerfile` are fork additions, not
 tracked here.)
+## jira: cleanup stale board associations after tickets leave/change board
+
+**Files:**
+- `backend/plugins/jira/impl/impl.go`
+- `backend/plugins/jira/tasks/stale_board_issue_cleaner.go`
+- `backend/plugins/jira/tasks/stale_board_issue_cleaner_test.go`
+
+**Reason:** Incremental Jira collection only adds board associations; it never removes
+issues that left the board or moved to a different team. Stale rows in
+`_tool_jira_board_issues` / domain `board_issues` keep those tickets on the old
+board in metrics. Adds `cleanupStaleBoardIssues`, which batch-checks membership
+via `agile/1.0/board/:id/issue` JQL (`issue IN (...)`, 100 per request),
+re-fetches current issue state, and deletes the stale associations.
+
+**Upstream status:** N/A — Konflux-specific subtask, not present in upstream Apache DevLake. Also depends on `collectAndExtractSingleIssue` in `parent_issue_collector.go` (Konflux-only).
+**Upstream PR:** none — not applicable
+**Owner:** @rsoaresd
+
+**Rebase notes:** `stale_board_issue_cleaner.go` specific use case; no upstream equivalent.
+`impl.go` registers `CleanupStaleBoardIssuesMeta` in `SubTaskMetas()` after
+`ExtractEpicsMeta` — same conflict hotspot as `CollectParentIssuesMeta`.
+Cleanup reuses `collectAndExtractSingleIssue` from `parent_issue_collector.go`
+(also Konflux-only).
