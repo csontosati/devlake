@@ -30,15 +30,19 @@ var _ plugin.MigrationScript = (*addAiCommitsDomain)(nil)
 type addAiCommitsDomain struct{}
 
 type archivedAiCommit20260826 struct {
-	Id           string `gorm:"primaryKey;type:varchar(255)"`
-	ProjectName  string `gorm:"index;type:varchar(255)"`
-	CommitSha    string `gorm:"index;type:varchar(40)"`
-	RepoId       string `gorm:"index;type:varchar(255)"`
-	AiTool       string `gorm:"type:varchar(100)"`
-	AuthorName   string `gorm:"type:varchar(255)"`
-	AuthoredDate time.Time
-	CreatedAt    time.Time
-	UpdatedAt    *time.Time
+	Id            string `gorm:"primaryKey;type:varchar(255)"`
+	ProjectName   string `gorm:"index;type:varchar(255)"`
+	CommitSha     string `gorm:"index;type:varchar(40)"`
+	RepoId        string `gorm:"index;type:varchar(255)"`
+	AiTool        string `gorm:"type:varchar(100)"`
+	AuthorName    string `gorm:"type:varchar(255)"`
+	AuthoredDate  time.Time
+	CreatedAt     time.Time
+	UpdatedAt     *time.Time
+	RawDataParams string `gorm:"column:_raw_data_params;type:varchar(255);index"`
+	RawDataTable  string `gorm:"column:_raw_data_table;type:varchar(255)"`
+	RawDataId     uint64 `gorm:"column:_raw_data_id"`
+	RawDataRemark string `gorm:"column:_raw_data_remark"`
 }
 
 func (archivedAiCommit20260826) TableName() string { return "ai_commits" }
@@ -47,6 +51,21 @@ func (*addAiCommitsDomain) Up(basicRes context.BasicRes) errors.Error {
 	db := basicRes.GetDal()
 	if err := db.AutoMigrate(&archivedAiCommit20260826{}); err != nil {
 		return err
+	}
+	// AutoMigrate often skips columns whose names start with '_'.
+	alters := []struct{ column, sql string }{
+		{"_raw_data_params", "ALTER TABLE `ai_commits` ADD COLUMN `_raw_data_params` varchar(255)"},
+		{"_raw_data_table", "ALTER TABLE `ai_commits` ADD COLUMN `_raw_data_table` varchar(255)"},
+		{"_raw_data_id", "ALTER TABLE `ai_commits` ADD COLUMN `_raw_data_id` bigint unsigned"},
+		{"_raw_data_remark", "ALTER TABLE `ai_commits` ADD COLUMN `_raw_data_remark` longtext"},
+	}
+	for _, a := range alters {
+		if db.HasColumn("ai_commits", a.column) {
+			continue
+		}
+		if err := db.Exec(a.sql); err != nil {
+			return errors.Default.Wrap(err, "failed: "+a.sql)
+		}
 	}
 	return nil
 }
