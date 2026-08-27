@@ -29,7 +29,7 @@ Single-file verification: `go vet ./plugins/aireview/...`
 - Subtask order matters: see `SubTaskMetas()` in `impl/impl.go`
 - All regex patterns are compiled once in `tasks.CompilePatterns()` and stored in `AiReviewTaskData`
 - New AI tool support: add fields to `AiReviewScopeConfig`, update `CompilePatterns()`, update `detectAiTool()`
-- AI-assisted **commits** are classified by `detectAiCommit()` (trailer matchers + optional `AiCommitPatterns`); do not reimplement bot detection (`accounts.is_bot`)
+- AI-assisted **commits** are classified by `detectAiCommit()` (trailer matchers + optional `AiCommitPatterns`) 
 
 ## Don'ts
 

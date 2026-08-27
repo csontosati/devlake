@@ -79,6 +79,8 @@ func TestConvertAiCommits_WithProject(t *testing.T) {
 		}
 	}).Return(nil)
 
+	// Generated Dal.CreateOrUpdate mock always records (entity, clauses), even
+	// when production code calls CreateOrUpdate(c) with no extra clauses.
 	mockDalI.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(nil)
 
 	err := ConvertAiCommits(mockCtx)

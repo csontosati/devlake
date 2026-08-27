@@ -279,7 +279,6 @@ no orphan handling) — low conflict risk, isolated to the `Convert` closure bod
 the aireview plugin. Grafana LEFT JOINs `ai_commits` instead of evaluating
 Co-Authored-By / Assisted-by / Made-with trailers at query time. Follows the
 same pattern as `ai_reviews` (tool table in aireview, domain table in core).
-Bot identity is **not** stored here — use `accounts.is_bot`.
 
 **Upstream status:** N/A — Konflux aireview addition; upstream Apache DevLake
 has no equivalent table.

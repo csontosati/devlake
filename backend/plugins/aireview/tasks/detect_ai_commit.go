@@ -46,8 +46,6 @@ func commitTrailer(message string) string {
 }
 
 // detectAiCommit reports whether a commit is AI-assisted and which tool authored it.
-// Named-tool matchers run in dashboard CASE order: Cursor, Claude, Copilot,
-// CodeRabbit, then unknown Assisted-by / Made-with, then optional extraPattern.
 func detectAiCommit(message, authorName string, extraPattern *regexp.Regexp) (string, bool) {
 	trailer := commitTrailer(message)
 

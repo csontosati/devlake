@@ -48,38 +48,14 @@ Bot identity is **not** stored here — join `accounts.is_bot`.
 
 ### `ai_commits`
 
-Project-scoped domain copy of `_tool_aireview_commits` (same columns plus `project_name`).
+Project-scoped domain copy of `_tool_aireview_commits` (same columns plus `project_name`). Grafana and n8n should join this table, not `_tool_aireview_commits`.
 
-## Grafana: AI-assisted vs bot vs human commits
+After an aireview **project** pipeline run:
 
-After an aireview project pipeline run, dashboards can use:
-
-```sql
-SELECT
-  c.sha AS commitID,
-  r.name AS repoName,
-  (ac.commit_sha IS NOT NULL) AS aiAssisted,
-  (ac.commit_sha IS NULL AND COALESCE(a.is_bot, 0) = 1) AS bot,
-  (ac.commit_sha IS NULL AND COALESCE(a.is_bot, 0) = 0
-     AND LEFT(CONVERT(c.message USING utf8mb4), 40) NOT LIKE 'Merge %') AS human,
-  ac.ai_tool AS aiToolUsed,
-  c.author_name AS committerUsername,
-  c.authored_date AS dateOfCommit
-FROM commits c
-JOIN repo_commits rc ON rc.commit_sha = c.sha
-JOIN repos r ON r.id = rc.repo_id
-JOIN project_mapping pm ON pm.row_id = r.id AND pm.`table` = 'repos'
-LEFT JOIN ai_commits ac
-  ON ac.commit_sha = c.sha AND ac.project_name = '${project}'
-LEFT JOIN accounts a
-  ON a.user_name = c.author_name OR a.email = c.author_email
-WHERE pm.project_name = '${project}'
-  AND c.authored_date IS NOT NULL
-  AND $__timeFilter(c.authored_date);
-```
-
-`commits.author_id` is a git **email**, not `accounts.id`, so join on `user_name` / `email`.
-Merge commits are excluded from `human` with a cheap prefix check; they are not bots.
+- `aiAssisted` / `aiToolUsed` = `LEFT JOIN ai_commits` (use `ai_tool` as stored; do not remap in SQL)
+- `bot` = `accounts.is_bot` and not in `ai_commits`
+- `human` = neither of the above, excluding merge-commit message prefixes (`Merge pull request #`, `Merge branch `, `Merge remote-tracking branch `)
+- Merge commits are not bots. Join `accounts` on `email` / `user_name` (`commits.author_id` is a git email, not `accounts.id`).
 
 ### `_tool_aireview_findings`
 
