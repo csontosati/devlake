@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/apache/incubator-devlake/plugins/aireview/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDetectAiCommit(t *testing.T) {
@@ -160,20 +161,14 @@ func TestDetectAiCommit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotTool, gotAI := detectAiCommit(tt.message, tt.authorName, tt.extra)
-			if gotAI != tt.wantAI || gotTool != tt.wantTool {
-				t.Errorf("detectAiCommit() = (%q, %v), want (%q, %v)", gotTool, gotAI, tt.wantTool, tt.wantAI)
-			}
+			assert.Equal(t, tt.wantTool, gotTool)
+			assert.Equal(t, tt.wantAI, gotAI)
 		})
 	}
 }
 
 func TestCommitTrailer(t *testing.T) {
-	if got := commitTrailer("short"); got != "short" {
-		t.Errorf("commitTrailer(short) = %q", got)
-	}
+	assert.Equal(t, "short", commitTrailer("short"))
 	long := strings.Repeat("a", trailerSuffixLen+10)
-	got := commitTrailer(long)
-	if len(got) != trailerSuffixLen {
-		t.Errorf("commitTrailer(long) len = %d, want %d", len(got), trailerSuffixLen)
-	}
+	assert.Equal(t, trailerSuffixLen, len(commitTrailer(long)))
 }
