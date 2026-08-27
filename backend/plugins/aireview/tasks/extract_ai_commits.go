@@ -103,12 +103,15 @@ func ExtractAiCommits(taskCtx plugin.SubTaskContext) errors.Error {
 		) combined`, repoIds, repoIds, repoIds, "MERGED", ""),
 		dal.Join("LEFT JOIN commits c ON combined.sha = c.sha"),
 		dal.Join(`LEFT JOIN (
-			SELECT commit_sha,
-				MIN(commit_author_name) AS commit_author_name,
-				MIN(commit_authored_date) AS commit_authored_date
-			FROM pull_request_commits
-			GROUP BY commit_sha
-		) prc_data ON combined.sha = prc_data.commit_sha`),
+			SELECT prc.commit_sha,
+				pr.base_repo_id AS repo_id,
+				MIN(prc.commit_author_name) AS commit_author_name,
+				MIN(prc.commit_authored_date) AS commit_authored_date
+			FROM pull_request_commits prc
+			INNER JOIN pull_requests pr ON prc.pull_request_id = pr.id
+			WHERE pr.base_repo_id IN ?
+			GROUP BY prc.commit_sha, pr.base_repo_id
+		) prc_data ON combined.sha = prc_data.commit_sha AND combined.repo_id = prc_data.repo_id`, repoIds),
 	}
 	if githubJoin != "" {
 		clauses = append(clauses, dal.Join(githubJoin))

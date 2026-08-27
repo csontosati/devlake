@@ -98,6 +98,13 @@ func TestDetectAiCommit(t *testing.T) {
 			wantAI:     true,
 		},
 		{
+			name:       "CodeRabbit author mixed case",
+			message:    "Apply suggestions from code review",
+			authorName: "CodeRabbitAI[bot]",
+			wantTool:   models.AiToolCodeRabbit,
+			wantAI:     true,
+		},
+		{
 			name:     "Cursor takes precedence over Claude in the same message",
 			message:  "both\n\nCo-Authored-By: Cursor <cursoragent@cursor.com>\nCo-Authored-By: Claude <noreply@anthropic.com>",
 			wantTool: models.AiToolCursor,

@@ -19,7 +19,6 @@ package tasks
 
 import (
 	"regexp"
-	"strings"
 
 	"github.com/apache/incubator-devlake/plugins/aireview/models"
 )
@@ -33,6 +32,7 @@ var (
 	claudeTrailerRe     = regexp.MustCompile(`(?i)(?:co-authored-by:|assisted-by:|made-with:).*(?:claude|anthropic\.com)`)
 	copilotTrailerRe    = regexp.MustCompile(`(?i)(?:co-authored-by:|assisted-by:|made-with:).*copilot`)
 	codeRabbitTrailerRe = regexp.MustCompile(`(?i)(?:co-authored-by:|assisted-by:|made-with:).*coderabbit`)
+	codeRabbitAuthorRe  = regexp.MustCompile(`(?i)coderabbit`)
 	assistedByRe        = regexp.MustCompile(`(?i)assisted-by:`)
 	madeWithRe          = regexp.MustCompile(`(?i)made-with:`)
 )
@@ -58,7 +58,7 @@ func detectAiCommit(message, authorName string, extraPattern *regexp.Regexp) (st
 	if copilotTrailerRe.MatchString(trailer) {
 		return models.AiToolCopilot, true
 	}
-	if codeRabbitTrailerRe.MatchString(trailer) || strings.Contains(strings.ToLower(authorName), "coderabbit") {
+	if codeRabbitTrailerRe.MatchString(trailer) || codeRabbitAuthorRe.MatchString(authorName) {
 		return models.AiToolCodeRabbit, true
 	}
 	if assistedByRe.MatchString(trailer) {
