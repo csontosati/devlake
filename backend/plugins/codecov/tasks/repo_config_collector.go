@@ -18,7 +18,9 @@ limitations under the License.
 package tasks
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,11 +38,14 @@ var CollectRepoConfigMeta = plugin.SubTaskMeta{
 	Name:             "CollectRepoConfig",
 	EntryPoint:       CollectRepoConfig,
 	EnabledByDefault: true,
-	Description:      "Fetch codecov.yml from the repository and parse coverage thresholds",
+	Description:      "Fetch codecov.yml via Codecov GraphQL and parse coverage thresholds",
 	DomainTypes:      []string{plugin.DOMAIN_TYPE_CODE},
 }
 
 const maxConfigSize = 1 << 20 // 1 MiB
+
+// maxGraphQLResponseSize allows JSON wrapper overhead around the yaml payload.
+const maxGraphQLResponseSize = maxConfigSize + (64 << 10)
 
 const repoYamlGraphQLQuery = `query GetRepoSettings($name: String!, $repo: String!) {
   owner(username: $name) {
@@ -114,6 +119,7 @@ func fetchRepoYaml(apiClient *helper.ApiAsyncClient, logger log.Logger, serviceS
 	if err != nil {
 		return "", err
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		return "", errors.HttpStatus(res.StatusCode).New(
@@ -121,9 +127,21 @@ func fetchRepoYaml(apiClient *helper.ApiAsyncClient, logger log.Logger, serviceS
 		)
 	}
 
+	limited := io.LimitReader(res.Body, maxGraphQLResponseSize+1)
+	resBody, readErr := io.ReadAll(limited)
+	if readErr != nil {
+		return "", errors.Default.Wrap(readErr, "error reading GraphQL response body")
+	}
+	if len(resBody) == 0 {
+		return "", helper.ErrEmptyResponse
+	}
+	if len(resBody) > maxGraphQLResponseSize {
+		return "", errors.Default.New(fmt.Sprintf("GraphQL response exceeds size limit (%d bytes)", maxGraphQLResponseSize))
+	}
+
 	var result graphqlRepoYamlResponse
-	if err := helper.UnmarshalResponse(res, &result); err != nil {
-		return "", err
+	if err := errors.Convert(json.Unmarshal(resBody, &result)); err != nil {
+		return "", errors.HttpStatus(res.StatusCode).Wrap(err, "error decoding GraphQL response")
 	}
 
 	if len(result.Errors) > 0 {
@@ -174,8 +192,7 @@ func CollectRepoConfig(taskCtx plugin.SubTaskContext) errors.Error {
 
 	rawYaml, fetchErr := fetchRepoYaml(data.ApiClient, logger, serviceShort, owner, repo)
 	if fetchErr != nil {
-		logger.Warn(fetchErr, "[Codecov] CollectRepoConfig: failed to fetch repo yaml via GraphQL for %s/%s", owner, repo)
-		return nil
+		return errors.Default.Wrap(fetchErr, fmt.Sprintf("[Codecov] CollectRepoConfig: failed to fetch repo yaml via GraphQL for %s/%s", owner, repo))
 	}
 
 	if rawYaml == "" {

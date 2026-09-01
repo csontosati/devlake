@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/apache/incubator-devlake/core/errors"
 	helper "github.com/apache/incubator-devlake/helpers/pluginhelper/api"
 	"github.com/apache/incubator-devlake/plugins/codecov/models"
 )
@@ -140,6 +142,19 @@ func TestFetchRepoYaml_HTTP404(t *testing.T) {
 	assert.Empty(t, got)
 }
 
+func TestFetchRepoYaml_ResponseTooLarge(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(make([]byte, maxGraphQLResponseSize+1))
+	})
+
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	assert.Error(t, err)
+	assert.Empty(t, got)
+	assert.Contains(t, err.Error(), "exceeds size limit")
+}
+
 func TestFetchRepoYaml_GraphQLErrors(t *testing.T) {
 	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -153,6 +168,76 @@ func TestFetchRepoYaml_GraphQLErrors(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, got)
 	logger.AssertExpectations(t)
+}
+
+func TestFetchRepoYaml_EmptyResponseBody(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	assert.Error(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFetchRepoYaml_InvalidJSON(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not-json`))
+	})
+
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	assert.Error(t, err)
+	assert.Empty(t, got)
+	assert.Contains(t, err.Error(), "error decoding GraphQL response")
+}
+
+func TestFetchRepoYaml_EmptyYamlString(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"owner":{"repository":{"yaml":""}}}}`))
+	})
+
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	assert.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFetchRepoYaml_YamlExceedsSizeLimit(t *testing.T) {
+	oversizedYaml := strings.Repeat("x", maxConfigSize+1)
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		resp := map[string]interface{}{
+			"data": map[string]interface{}{
+				"owner": map[string]interface{}{
+					"repository": map[string]interface{}{
+						"yaml": oversizedYaml,
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	assert.Error(t, err)
+	assert.Empty(t, got)
+	assert.Contains(t, err.Error(), "repo yaml exceeds size limit")
+}
+
+func TestFetchRepoYaml_PostError(t *testing.T) {
+	apiClient := &helper.ApiClient{}
+	apiClient.Setup("http://127.0.0.1:1", nil, 50*time.Millisecond)
+	client := &helper.ApiAsyncClient{ApiClient: apiClient}
+
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(client, logger, "gh", "owner", "repo")
+	assert.Error(t, err)
+	assert.Empty(t, got)
 }
 
 // --- CollectRepoConfig (integration) ---
@@ -227,6 +312,147 @@ func TestCollectRepoConfig_SkipsWhenRepoMissing(t *testing.T) {
 	err := CollectRepoConfig(mockCtx)
 	assert.NoError(t, err)
 	mockDal.AssertNotCalled(t, "CreateOrUpdate", mock.Anything, mock.Anything)
+}
+
+func TestCollectRepoConfig_ReturnsFetchError(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"detail":"Unauthorized"}`))
+	})
+
+	mockCtx := new(mockplugin.SubTaskContext)
+	mockDal := new(mockdal.Dal)
+	mockLogger := new(mocklog.Logger)
+
+	mockCtx.On("GetData").Return(&CodecovTaskData{
+		Options: &CodecovOptions{
+			ConnectionId: 1,
+			FullName:     "konflux-ci/build-service",
+		},
+		Service:   "github",
+		ApiClient: apiClient,
+		Repo:      &models.CodecovRepo{},
+	})
+	mockCtx.On("GetDal").Return(mockDal)
+	mockCtx.On("GetLogger").Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Once()
+
+	err := CollectRepoConfig(mockCtx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch repo yaml via GraphQL")
+	mockDal.AssertNotCalled(t, "CreateOrUpdate", mock.Anything, mock.Anything)
+}
+
+func TestCollectRepoConfig_InvalidFullName(t *testing.T) {
+	mockCtx := new(mockplugin.SubTaskContext)
+	mockDal := new(mockdal.Dal)
+	mockLogger := new(mocklog.Logger)
+
+	mockCtx.On("GetData").Return(&CodecovTaskData{
+		Options: &CodecovOptions{
+			ConnectionId: 1,
+			FullName:     "invalid-full-name-without-slash",
+		},
+		Service: "github",
+		Repo:    &models.CodecovRepo{},
+	})
+	mockCtx.On("GetDal").Return(mockDal)
+	mockCtx.On("GetLogger").Return(mockLogger)
+
+	err := CollectRepoConfig(mockCtx)
+	assert.Error(t, err)
+	mockDal.AssertNotCalled(t, "CreateOrUpdate", mock.Anything, mock.Anything)
+}
+
+func TestCollectRepoConfig_SkipsUnsupportedService(t *testing.T) {
+	mockCtx := new(mockplugin.SubTaskContext)
+	mockDal := new(mockdal.Dal)
+	mockLogger := new(mocklog.Logger)
+
+	mockCtx.On("GetData").Return(&CodecovTaskData{
+		Options: &CodecovOptions{
+			ConnectionId: 1,
+			FullName:     "konflux-ci/build-service",
+		},
+		Service: "unknown-provider",
+		Repo:    &models.CodecovRepo{},
+	})
+	mockCtx.On("GetDal").Return(mockDal)
+	mockCtx.On("GetLogger").Return(mockLogger)
+	mockLogger.On("Warn", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Once()
+
+	err := CollectRepoConfig(mockCtx)
+	assert.NoError(t, err)
+	mockDal.AssertNotCalled(t, "CreateOrUpdate", mock.Anything, mock.Anything)
+}
+
+func TestCollectRepoConfig_NoConfigFound(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"owner":{"repository":{"yaml":null}}}}`))
+	})
+
+	mockCtx := new(mockplugin.SubTaskContext)
+	mockDal := new(mockdal.Dal)
+	mockLogger := new(mocklog.Logger)
+
+	mockCtx.On("GetData").Return(&CodecovTaskData{
+		Options: &CodecovOptions{
+			ConnectionId: 1,
+			FullName:     "konflux-ci/build-service",
+		},
+		Service:   "github",
+		ApiClient: apiClient,
+		Repo:      &models.CodecovRepo{},
+	})
+	mockCtx.On("GetDal").Return(mockDal)
+	mockCtx.On("GetLogger").Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Maybe()
+
+	err := CollectRepoConfig(mockCtx)
+	assert.NoError(t, err)
+	mockDal.AssertNotCalled(t, "CreateOrUpdate", mock.Anything, mock.Anything)
+}
+
+func TestCollectRepoConfig_CreateOrUpdateError(t *testing.T) {
+	yamlContent := "coverage:\n  status:\n    patch:\n      default:\n        target: 80%\n"
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		resp := map[string]interface{}{
+			"data": map[string]interface{}{
+				"owner": map[string]interface{}{
+					"repository": map[string]interface{}{
+						"yaml": yamlContent,
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	mockCtx := new(mockplugin.SubTaskContext)
+	mockDal := new(mockdal.Dal)
+	mockLogger := new(mocklog.Logger)
+
+	mockCtx.On("GetData").Return(&CodecovTaskData{
+		Options: &CodecovOptions{
+			ConnectionId: 1,
+			FullName:     "konflux-ci/build-service",
+		},
+		Service:   "github",
+		ApiClient: apiClient,
+		Repo:      &models.CodecovRepo{},
+	})
+	mockCtx.On("GetDal").Return(mockDal)
+	mockCtx.On("GetLogger").Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Maybe()
+
+	mockDal.On("CreateOrUpdate", mock.Anything, mock.Anything).
+		Return(errors.Default.New("db unavailable")).Once()
+
+	err := CollectRepoConfig(mockCtx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to save repo config")
 }
 
 // --- parseCodecovYaml ---
