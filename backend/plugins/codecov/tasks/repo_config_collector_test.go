@@ -18,82 +18,215 @@ limitations under the License.
 package tasks
 
 import (
-	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	mockdal "github.com/apache/incubator-devlake/mocks/core/dal"
+	mocklog "github.com/apache/incubator-devlake/mocks/core/log"
+	mockplugin "github.com/apache/incubator-devlake/mocks/core/plugin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
+	helper "github.com/apache/incubator-devlake/helpers/pluginhelper/api"
+	"github.com/apache/incubator-devlake/plugins/codecov/models"
 )
 
-// --- buildRawContentURL ---
+// --- serviceShortCode ---
 
-func TestBuildRawContentURL_GitHub(t *testing.T) {
-	url := buildRawContentURL("github", "konflux-ci", "build-service", "main", ".codecov.yml")
-	assert.Equal(t, "https://raw.githubusercontent.com/konflux-ci/build-service/main/.codecov.yml", url)
-}
-
-func TestBuildRawContentURL_GitLab(t *testing.T) {
-	url := buildRawContentURL("gitlab", "konflux-ci", "build-service", "main", "codecov.yml")
-	assert.Contains(t, url, "gitlab.com/api/v4/projects/")
-	assert.Contains(t, url, "raw?ref=main")
-}
-
-func TestBuildRawContentURL_GitLabSubgroup(t *testing.T) {
-	url := buildRawContentURL("gitlab", "org:subgroup", "myrepo", "main", ".codecov.yml")
-	assert.Contains(t, url, "projects/org%2Fsubgroup%2Fmyrepo/")
-	assert.NotContains(t, url, "%3A")
-	assert.Contains(t, url, "raw?ref=main")
-}
-
-func TestBuildRawContentURL_EnterpriseServicesSkipped(t *testing.T) {
-	for _, svc := range []string{"github_enterprise", "gitlab_enterprise", "bitbucket", "bitbucket_server"} {
-		url := buildRawContentURL(svc, "owner", "repo", "main", "codecov.yml")
-		assert.Equal(t, "", url, "expected empty URL for service %q", svc)
+func TestServiceShortCode_AllServices(t *testing.T) {
+	cases := map[string]string{
+		"github":             "gh",
+		"github_enterprise":  "ghe",
+		"gitlab":             "gl",
+		"gitlab_enterprise":  "gle",
+		"bitbucket":          "bb",
+		"bitbucket_server":   "bbs",
+	}
+	for service, want := range cases {
+		got, err := serviceShortCode(service)
+		require.NoError(t, err)
+		assert.Equal(t, want, got, "service %q", service)
 	}
 }
 
-// --- fetchFile ---
+func TestServiceShortCode_Unknown(t *testing.T) {
+	_, err := serviceShortCode("unknown")
+	assert.Error(t, err)
+}
 
-func TestFetchFile_Success(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// --- fetchRepoYaml ---
+
+func newTestGraphQLApiClient(t *testing.T, handler http.HandlerFunc) *helper.ApiAsyncClient {
+	t.Helper()
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+
+	apiClient := &helper.ApiClient{}
+	apiClient.Setup(ts.URL, nil, 10*time.Second)
+	return &helper.ApiAsyncClient{ApiClient: apiClient}
+}
+
+func TestFetchRepoYaml_Success(t *testing.T) {
+	yamlContent := "coverage:\n  status:\n    patch:\n      default:\n        target: 80%\n"
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/graphql/gh", r.URL.Path)
+
+		var reqBody map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
+		assert.Contains(t, reqBody["query"], "GetRepoSettings")
+
+		vars, ok := reqBody["variables"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "konflux-ci", vars["name"])
+		assert.Equal(t, "build-service", vars["repo"])
+
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("coverage:\n  status:\n    patch:\n      default:\n        target: 80%\n"))
-	}))
-	defer ts.Close()
+		resp := map[string]interface{}{
+			"data": map[string]interface{}{
+				"owner": map[string]interface{}{
+					"repository": map[string]interface{}{
+						"yaml": yamlContent,
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
 
-	body, err := fetchFile(context.Background(), ts.URL)
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "konflux-ci", "build-service")
 	assert.NoError(t, err)
-	assert.Contains(t, body, "target: 80%")
+	assert.Contains(t, got, "target: 80%")
 }
 
-func TestFetchFile_404(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer ts.Close()
-
-	_, err := fetchFile(context.Background(), ts.URL)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "404")
-}
-
-func TestFetchFile_BadURL(t *testing.T) {
-	_, err := fetchFile(context.Background(), "http://127.0.0.1:1/nonexistent")
-	assert.Error(t, err)
-}
-
-func TestFetchFile_CancelledContext(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestFetchRepoYaml_NullYaml(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("data"))
-	}))
-	defer ts.Close()
+		_, _ = w.Write([]byte(`{"data":{"owner":{"repository":{"yaml":null}}}}`))
+	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err := fetchFile(ctx, ts.URL)
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	assert.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFetchRepoYaml_HTTP401(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"detail":"Unauthorized"}`))
+	})
+
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
 	assert.Error(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFetchRepoYaml_HTTP404(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"detail":"Not found"}`))
+	})
+
+	logger := mocklog.NewLogger(t)
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	assert.Error(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFetchRepoYaml_GraphQLErrors(t *testing.T) {
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":null,"errors":[{"message":"Repository not found"}]}`))
+	})
+
+	logger := new(mocklog.Logger)
+	logger.On("Warn", mock.Anything, mock.Anything, mock.Anything).Return().Once()
+
+	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	assert.NoError(t, err)
+	assert.Empty(t, got)
+	logger.AssertExpectations(t)
+}
+
+// --- CollectRepoConfig (integration) ---
+
+func TestCollectRepoConfig_SavesParsedConfig(t *testing.T) {
+	yamlContent := "coverage:\n  status:\n    patch:\n      default:\n        target: 80%\n"
+	apiClient := newTestGraphQLApiClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		resp := map[string]interface{}{
+			"data": map[string]interface{}{
+				"owner": map[string]interface{}{
+					"repository": map[string]interface{}{
+						"yaml": yamlContent,
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	})
+
+	mockCtx := new(mockplugin.SubTaskContext)
+	mockDal := new(mockdal.Dal)
+	mockLogger := new(mocklog.Logger)
+
+	mockCtx.On("GetData").Return(&CodecovTaskData{
+		Options: &CodecovOptions{
+			ConnectionId: 1,
+			FullName:     "konflux-ci/build-service",
+		},
+		ApiClient: apiClient,
+		Service:   "github",
+		Repo:      &models.CodecovRepo{Branch: "main"},
+	})
+	mockCtx.On("GetDal").Return(mockDal)
+	mockCtx.On("GetLogger").Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Maybe()
+	mockLogger.On("Warn", mock.Anything, mock.Anything, mock.Anything).Maybe()
+
+	mockDal.On("CreateOrUpdate", mock.MatchedBy(func(entity interface{}) bool {
+		cfg, ok := entity.(*models.CodecovRepoConfig)
+		if !ok {
+			return false
+		}
+		return cfg.ConnectionId == 1 &&
+			cfg.RepoId == "konflux-ci/build-service" &&
+			cfg.ConfigSource == "codecov-graphql" &&
+			cfg.PatchTarget != nil && *cfg.PatchTarget == 80.0
+	}), mock.Anything).Return(nil).Once()
+
+	err := CollectRepoConfig(mockCtx)
+	assert.NoError(t, err)
+	mockDal.AssertExpectations(t)
+}
+
+func TestCollectRepoConfig_SkipsWhenRepoMissing(t *testing.T) {
+	mockCtx := new(mockplugin.SubTaskContext)
+	mockDal := new(mockdal.Dal)
+	mockLogger := new(mocklog.Logger)
+
+	mockCtx.On("GetData").Return(&CodecovTaskData{
+		Options: &CodecovOptions{
+			ConnectionId: 1,
+			FullName:     "konflux-ci/build-service",
+		},
+		Service: "github",
+		Repo:    nil,
+	})
+	mockCtx.On("GetDal").Return(mockDal)
+	mockCtx.On("GetLogger").Return(mockLogger)
+	mockLogger.On("Warn", mock.Anything, mock.Anything, mock.Anything).Once()
+
+	err := CollectRepoConfig(mockCtx)
+	assert.NoError(t, err)
+	mockDal.AssertNotCalled(t, "CreateOrUpdate", mock.Anything, mock.Anything)
 }
 
 // --- parseCodecovYaml ---
