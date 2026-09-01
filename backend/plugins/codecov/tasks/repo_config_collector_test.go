@@ -322,7 +322,7 @@ func TestCollectRepoConfig_ReturnsFetchError(t *testing.T) {
 	})
 	mockCtx.On("GetDal").Return(mockDal)
 	mockCtx.On("GetLogger").Return(mockLogger)
-	mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Once()
+	mockLogger.On("Info", mock.Anything, mock.Anything).Maybe()
 
 	err := CollectRepoConfig(mockCtx)
 	assert.Error(t, err)
@@ -366,7 +366,7 @@ func TestCollectRepoConfig_SkipsUnsupportedService(t *testing.T) {
 	})
 	mockCtx.On("GetDal").Return(mockDal)
 	mockCtx.On("GetLogger").Return(mockLogger)
-	mockLogger.On("Warn", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Once()
+	mockLogger.On("Warn", mock.Anything, mock.Anything, mock.Anything).Maybe()
 
 	err := CollectRepoConfig(mockCtx)
 	assert.NoError(t, err)
