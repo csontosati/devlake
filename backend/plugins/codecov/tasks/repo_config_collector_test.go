@@ -100,8 +100,7 @@ func TestFetchRepoYaml_Success(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "konflux-ci", "build-service")
+	got, err := fetchRepoYaml(apiClient, "gh", "konflux-ci", "build-service")
 	assert.NoError(t, err)
 	assert.Contains(t, got, "target: 80%")
 }
@@ -112,8 +111,7 @@ func TestFetchRepoYaml_NullYaml(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":{"owner":{"repository":{"yaml":null}}}}`))
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
 	assert.NoError(t, err)
 	assert.Empty(t, got)
 }
@@ -124,8 +122,7 @@ func TestFetchRepoYaml_HTTP401(t *testing.T) {
 		_, _ = w.Write([]byte(`{"detail":"Unauthorized"}`))
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
 	assert.Error(t, err)
 	assert.Empty(t, got)
 }
@@ -136,8 +133,7 @@ func TestFetchRepoYaml_HTTP404(t *testing.T) {
 		_, _ = w.Write([]byte(`{"detail":"Not found"}`))
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
 	assert.Error(t, err)
 	assert.Empty(t, got)
 }
@@ -148,8 +144,7 @@ func TestFetchRepoYaml_ResponseTooLarge(t *testing.T) {
 		_, _ = w.Write(make([]byte, maxGraphQLResponseSize+1))
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
 	assert.Error(t, err)
 	assert.Empty(t, got)
 	assert.Contains(t, err.Error(), "exceeds size limit")
@@ -161,13 +156,10 @@ func TestFetchRepoYaml_GraphQLErrors(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":null,"errors":[{"message":"Repository not found"}]}`))
 	})
 
-	logger := new(mocklog.Logger)
-	logger.On("Warn", mock.Anything, mock.Anything, mock.Anything).Return().Once()
-
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
-	assert.NoError(t, err)
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
+	assert.Error(t, err)
 	assert.Empty(t, got)
-	logger.AssertExpectations(t)
+	assert.Contains(t, err.Error(), "Repository not found")
 }
 
 func TestFetchRepoYaml_EmptyResponseBody(t *testing.T) {
@@ -175,8 +167,7 @@ func TestFetchRepoYaml_EmptyResponseBody(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
 	assert.Error(t, err)
 	assert.Empty(t, got)
 }
@@ -187,8 +178,7 @@ func TestFetchRepoYaml_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not-json`))
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
 	assert.Error(t, err)
 	assert.Empty(t, got)
 	assert.Contains(t, err.Error(), "error decoding GraphQL response")
@@ -200,8 +190,7 @@ func TestFetchRepoYaml_EmptyYamlString(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":{"owner":{"repository":{"yaml":""}}}}`))
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
 	assert.NoError(t, err)
 	assert.Empty(t, got)
 }
@@ -222,8 +211,7 @@ func TestFetchRepoYaml_YamlExceedsSizeLimit(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	})
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(apiClient, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(apiClient, "gh", "owner", "repo")
 	assert.Error(t, err)
 	assert.Empty(t, got)
 	assert.Contains(t, err.Error(), "repo yaml exceeds size limit")
@@ -234,8 +222,7 @@ func TestFetchRepoYaml_PostError(t *testing.T) {
 	apiClient.Setup("http://127.0.0.1:1", nil, 50*time.Millisecond)
 	client := &helper.ApiAsyncClient{ApiClient: apiClient}
 
-	logger := mocklog.NewLogger(t)
-	got, err := fetchRepoYaml(client, logger, "gh", "owner", "repo")
+	got, err := fetchRepoYaml(client, "gh", "owner", "repo")
 	assert.Error(t, err)
 	assert.Empty(t, got)
 }

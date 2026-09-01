@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/apache/incubator-devlake/core/errors"
-	"github.com/apache/incubator-devlake/core/log"
 	"github.com/apache/incubator-devlake/core/models/common"
 	"github.com/apache/incubator-devlake/core/plugin"
 	helper "github.com/apache/incubator-devlake/helpers/pluginhelper/api"
@@ -105,7 +104,7 @@ func serviceShortCode(service string) (string, error) {
 	}
 }
 
-func fetchRepoYaml(apiClient *helper.ApiAsyncClient, logger log.Logger, serviceShort, owner, repo string) (string, errors.Error) {
+func fetchRepoYaml(apiClient *helper.ApiAsyncClient, serviceShort, owner, repo string) (string, errors.Error) {
 	path := fmt.Sprintf("/graphql/%s", serviceShort)
 	body := map[string]interface{}{
 		"query": repoYamlGraphQLQuery,
@@ -145,10 +144,11 @@ func fetchRepoYaml(apiClient *helper.ApiAsyncClient, logger log.Logger, serviceS
 	}
 
 	if len(result.Errors) > 0 {
-		for _, gqlErr := range result.Errors {
-			logger.Warn(nil, "[Codecov] CollectRepoConfig: GraphQL error: %s", gqlErr.Message)
+		msgs := make([]string, len(result.Errors))
+		for i, gqlErr := range result.Errors {
+			msgs[i] = gqlErr.Message
 		}
-		return "", nil
+		return "", errors.Default.New(fmt.Sprintf("GraphQL errors: %s", strings.Join(msgs, "; ")))
 	}
 
 	if result.Data.Owner.Repository.Yaml == nil {
@@ -190,9 +190,9 @@ func CollectRepoConfig(taskCtx plugin.SubTaskContext) errors.Error {
 
 	logger.Info("[Codecov] CollectRepoConfig: Fetching codecov config for %s/%s (service=%s)", owner, repo, data.Service)
 
-	rawYaml, fetchErr := fetchRepoYaml(data.ApiClient, logger, serviceShort, owner, repo)
+	rawYaml, fetchErr := fetchRepoYaml(data.ApiClient, serviceShort, owner, repo)
 	if fetchErr != nil {
-		return errors.Default.Wrap(fetchErr, fmt.Sprintf("[Codecov] CollectRepoConfig: failed to fetch repo yaml via GraphQL for %s/%s", owner, repo))
+		return errors.Default.Wrap(fetchErr, fmt.Sprintf("failed to fetch repo yaml via GraphQL for %s/%s", owner, repo))
 	}
 
 	if rawYaml == "" {
